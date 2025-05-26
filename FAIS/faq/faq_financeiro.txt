@@ -1,0 +1,26 @@
+P: Como faço para pagar a mensalidade?
+R: O pagamento pode ser feito via boleto bancário disponível no portal do aluno.
+
+P: Existe algum programa de bolsas de estudo?
+R: Sim, consulte os editais disponíveis no site da universidade.
+
+P: Posso solicitar segunda via do comprovante de matrícula?
+R: Sim, solicite pelo portal do aluno na seção de documentos.
+
+P: Perdi o boleto, como posso gerar outro?
+R: Você pode gerar uma segunda via no portal do aluno na aba "Financeiro".
+
+P: Como faço para parcelar a mensalidade?
+R: O parcelamento deve ser solicitado junto à secretaria financeira, mediante análise.
+
+P: Há desconto para pagamento antecipado?
+R: Sim, há desconto de 5% para pagamento até a data de vencimento.
+
+P: Quais formas de pagamento são aceitas?
+R: São aceitos boleto bancário, cartão de crédito e débito automático.
+
+P: Como consultar meu histórico financeiro?
+R: O histórico financeiro está disponível no portal do aluno, na seção “Financeiro”.
+
+P: O que fazer se meu pagamento não for registrado?
+R: Entre em contato com a secretaria financeira e envie o comprovante para regularização.

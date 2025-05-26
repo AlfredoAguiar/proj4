@@ -1,0 +1,47 @@
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>🤖 Jarvis</title>
+        <link rel="stylesheet" href="../static/styles.css">
+        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    </head>
+    <body>
+        <div class="container_">
+            <h1>🤖 Olá, eu sou o Jarvis! (Assistente virtual sem RAG - Retrieval Augmented Generation)</h1>
+            <p>Estou aqui para ajudar a responder questões com base em um conjunto de PDFs no ambiente administrativo.Este exemplo não utiliza RAG logo não aceita pdf´s longos e tem um tempo de resposta mais demorado</p>
+            <hr>
+            <p>   Como exemplo, estão disponíveis três documentos: </p>
+            <p>  Regulamento de Bolsas de Estudo (CMVC), Regulamento de Serviço de Cantinas e Refeições (CMVC), e Regulamento de Ação Climática (CMVC). </p>
+            <hr>
+            <p>Clique no ícone do chatbot para começar.</p>
+            <hr>
+            <img src="../static/noRAG.png" width="750" height="350" />
+        </div>
+        <div id="container">
+
+            <div id="chatbot-toggle-btn" class="chatbot-toggler">
+                🤖
+            </div>
+
+            <div id="chatbot-popup" class="chatbot-popup" style="display: none;">
+                <div class="chat-header">
+                    <h2>🤖 Jarvis</h2>
+                    <button id="close-btn" style="background: none; border: none; font-size: 20px; cursor: pointer;">✖</button>
+                </div>
+
+                <div class="chat-box">
+                    <ul id="chat"></ul>
+                </div>
+
+                <div class="chat-input">
+                    <input type="text" id="query" placeholder="Digite sua pergunta aqui...">
+                    <button id="send-btn">Enviar</button>
+                </div>
+            </div>
+        </div>
+
+        <script src="../static/chatbot_no_RAG.js"></script>
+    </body>
+    </html>

@@ -1,0 +1,29 @@
+P: Como faço minha matrícula?
+R: A matrícula é feita pelo portal do aluno entre 01/06 e 10/06.
+
+P: Qual o prazo para trancar disciplinas?
+R: O prazo para trancar disciplinas é até 15/06.
+
+P: Quais cursos estão disponíveis?
+R: Veja a lista de cursos no site da universidade.
+
+P: Como acessar o sistema acadêmico?
+R: O acesso é feito pelo endereço: https://sistema.universidade.edu/login
+
+P: Posso solicitar segunda via do comprovante de matrícula?
+R: Sim, solicite pelo portal do aluno na seção de documentos.
+
+P: Qual o horário de atendimento da secretaria?
+R: Atendimento de segunda a sexta, das 8h às 17h.
+
+P: Como faço para pagar a mensalidade?
+R: O pagamento pode ser feito via boleto bancário disponível no portal do aluno.
+
+P: O que fazer em caso de perda de documentos?
+R: Procure a secretaria com um boletim de ocorrência para emitir novos documentos.
+
+P: Como funciona o processo de transferência?
+R: Você deve preencher o formulário no portal e entregar os documentos na secretaria.
+
+P: Existe algum programa de bolsas de estudo?
+R: Sim, consulte os editais disponíveis no site da universidade.

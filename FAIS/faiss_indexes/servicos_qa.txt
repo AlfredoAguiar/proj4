@@ -1,0 +1,9 @@
+Qual o horário de atendimento da secretaria?	Atendimento de segunda a sexta, das 8h às 17h.
+O que fazer em caso de perda de documentos?	Procure a secretaria com um boletim de ocorrência para emitir novos documentos.
+Onde posso solicitar histórico escolar?	O histórico escolar pode ser solicitado pelo portal do aluno, na aba "Documentos".
+A universidade oferece carteirinha de estudante?	Sim, você pode solicitar a carteirinha pelo portal e retirar na secretaria.
+Como faço para agendar atendimento presencial?	O agendamento pode ser feito pelo site da universidade na seção de atendimento.
+Quais documentos preciso para solicitar a transferência?	Você deve apresentar histórico escolar, comprovante de matrícula e documento de identidade.
+Como faço para solicitar certidão de conclusão?	A certidão pode ser solicitada pelo portal do aluno ou diretamente na secretaria.
+É possível obter atendimento remoto?	Sim, a universidade oferece atendimento remoto via chat e videochamada.
+Como consultar vagas de estágio oferecidas pela universidade?	As vagas de estágio estão disponíveis no portal do aluno na seção de estágios.

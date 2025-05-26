@@ -1,0 +1,46 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat and PDF Management</title>
+    <link rel="stylesheet" href="../static/styles.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <div class="container_">
+        <h1>Chat History and txts</h1>
+
+        <!-- Uploaded PDFs Section -->
+        <h2>Uploaded</h2>
+        <div id="pdf-list" class="pdf-list"></div>
+
+        <!-- Upload PDF Section -->
+        <h2>Upload a New File</h2>
+        <form id="upload-form" enctype="multipart/form-data">
+            <label for="pdf-file" class="file-upload-label">Choose a File</label>
+           <input type="file" id="pdf-file" name="file" accept=".pdf, .txt, application/pdf, text/plain">
+            <p id="file-name"></p>
+            <button type="submit">Upload</button>
+        </form>
+
+        <h2>Run Embedings</h2>
+        <button id="run-script-btn">Run Script</button>
+        <div id="script-status"></div>
+
+        <!-- Chat History Section -->
+        <h2>Chat History</h2>
+        <div>
+            <input type="date" id="search-date" placeholder="Select a Date">
+            <input type="text" id="search-keywords" placeholder="Search by Keywords">
+            <button id="search-btn">Search</button>
+        </div>
+        <div id="chat-history" style="padding-right: 25px;"></div>
+
+    </div>
+    <script src="../static/chat_pdf_management.js"></script>
+</body>
+</html>
+

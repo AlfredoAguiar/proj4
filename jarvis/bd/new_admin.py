@@ -47,5 +47,4 @@ def create_admin_user():
         conn.close()
 
 
-# Executar a função para criar o usuário admin
 create_admin_user()

@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:latest
+    container_name: postgres-db_
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydatabase
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "myuser", "-d", "mydatabase"]
+      interval: 10s
+      retries: 5
+# Volumes for persistent storage
+volumes:
+
+  pgdata:
+
+# Networks definition for better isolation
+networks:
+  app-network:
+    driver: bridge
