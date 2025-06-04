@@ -1,0 +1,4 @@
+academico: enrollment, course, subject, system, transfer, calendar, certificate, credits, elective
+financeiro: tuition, invoice, payment, scholarship, financial, discount, installment, receipt
+servicos: registrar, document, transcript, ID card, service, schedule, certificate, internship, loss
+
