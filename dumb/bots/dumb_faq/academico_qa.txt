@@ -1,0 +1,9 @@
+Como faço minha matrícula?	A matrícula é feita pelo portal do aluno entre 01/06 e 10/06.
+Qual o prazo para trancar disciplinas?	O prazo para trancar disciplinas é até 15/06.
+Como acessar o sistema acadêmico?	O acesso é feito pelo endereço: https://sistema.universidade.edu/login
+Como funciona o processo de transferência?	Você deve preencher o formulário no portal e entregar os documentos na secretaria.
+Quais cursos estão disponíveis?	Veja a lista de cursos no site da universidade.
+Como solicitar declaração de matrícula?	Você pode solicitar a declaração pelo portal do aluno, na seção de documentos.
+Existe limite de créditos por semestre?	Sim, o limite é de 24 créditos por semestre, mas pode variar conforme o curso.
+Como faço para me inscrever em disciplinas optativas?	A inscrição é realizada pelo sistema acadêmico dentro do período estabelecido no calendário.
+Onde encontro o calendário acadêmico?	O calendário está disponível no site oficial da universidade na seção “Calendário Acadêmico”.

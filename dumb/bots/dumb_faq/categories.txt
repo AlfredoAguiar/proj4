@@ -1,0 +1,3 @@
+academico: matricula, disciplina, curso, sistema, transferencia, calendario, declaracao, creditos, optativa],
+financeiro: mensalidade, boleto", pagamento", bolsa", financeiro", desconto", parcelar, comprovante],
+servicos: secretaria", documento, historico, carteirinha, atendimento, agendar, certidao, estagio, perda]
