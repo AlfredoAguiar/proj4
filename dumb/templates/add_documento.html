@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block content %}
+  <form method="post" enctype="multipart/form-data">
+    <div class="mb-3">
+      <label>Título</label>
+      <input type="text" name="titulo" class="form-control" required>
+    </div>
+    <div class="mb-3">
+      <label>Ficheiro</label>
+      <input type="file" name="ficheiro" class="form-control" required>
+    </div>
+    <div class="mb-3">
+      <label>ID do Chatbot</label>
+      <input type="number" name="chatbot_id" class="form-control" required>
+    </div>
+    <button class="btn btn-primary">Upload</button>
+  </form>
+{% endblock %}

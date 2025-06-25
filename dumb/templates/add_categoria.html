@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block content %}
+  <form method="post">
+    <div class="mb-3">
+      <label>Nome da Categoria</label>
+      <input type="text" name="nome" class="form-control" required>
+    </div>
+    <button class="btn btn-success">Criar</button>
+  </form>
+{% endblock %}

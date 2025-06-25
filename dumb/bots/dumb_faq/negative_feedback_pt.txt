@@ -16,3 +16,24 @@ isso está mal
 má resposta
 má explicação
 não responde
+não está certo
+isso não está certo
+não está correto
+não entendeu
+não é bem isso
+isso não resolve
+isso não ajuda
+não está claro
+não faz sentido nenhum
+resposta incorreta
+péssima resposta
+explicação errada
+má compreensão
+não respondeu o que perguntei
+não era isso
+não era essa a resposta
+isso está completamente errado
+não corresponde
+não solucionou
+não resolveu
+

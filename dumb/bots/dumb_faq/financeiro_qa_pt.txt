@@ -7,4 +7,3 @@ Há desconto para pagamento antecipado?	Sim, há desconto de 5% para pagamento a
 Quais formas de pagamento são aceitas?	São aceitos boleto bancário, cartão de crédito e débito automático.
 Como consultar meu histórico financeiro?	O histórico financeiro está disponível no portal do aluno, na seção “Financeiro”.
 O que fazer se meu pagamento não for registrado?	Entre em contato com a secretaria financeira e envie o comprovante para regularização.
-

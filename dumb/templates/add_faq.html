@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block content %}
+  <form method="post">
+    <div class="mb-3">
+      <label>Pergunta</label>
+      <input type="text" name="pergunta" class="form-control" required>
+    </div>
+    <div class="mb-3">
+      <label>Resposta</label>
+      <textarea name="resposta" class="form-control" required></textarea>
+    </div>
+    <div class="mb-3">
+      <label>ID do Chatbot</label>
+      <input type="number" name="chatbot_id" class="form-control" required>
+    </div>
+    <button class="btn btn-primary">Submeter</button>
+  </form>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h4>Adicionar Chatbot</h4>
+  <form method="post">
+    <div class="mb-3">
+      <label>Nome</label>
+      <input type="text" name="nome" class="form-control" required>
+    </div>
+    <div class="mb-3">
+      <label>Descrição</label>
+      <textarea name="descricao" class="form-control"></textarea>
+    </div>
+<div class="mb-3">
+  <label>Idioma</label>
+  <select name="idioma" class="form-control" required>
+    <option value="">Selecione um idioma</option>
+    <option value="pt">Português</option>
+    <option value="en">Inglês</option>
+    <option value="fr">FrancêS</option>
+
+  </select>
+</div>
+
+    idioma
+    <button class="btn btn-primary">Criar</button>
+  </form>
+{% endblock %}

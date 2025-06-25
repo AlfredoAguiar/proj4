@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block content %}
+  <ul>
+    <li><a href="{{ url_for('add_categoria') }}">Adicionar Categoria</a></li>
+    <li><a href="{{ url_for('add_faq') }}">Adicionar FAQ</a></li>
+    <li><a href="{{ url_for('add_documento') }}">Adicionar Documento</a></li>
+    <li><a href="{{ url_for('add_chatbot') }}">Criar novo Chatbot</a></li>
+
+  </ul>
+{% endblock %}
