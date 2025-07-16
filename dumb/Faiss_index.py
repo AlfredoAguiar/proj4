@@ -45,7 +45,7 @@ def build_and_save_indexes(faq_folder, model, index_folder):
 
 if __name__ == "__main__":
     model = SentenceTransformer('all-MiniLM-L6-v2')
-    faq_folder = "faq"
+    faq_folder = "bots/dumb_faq"
     index_folder = "faiss_indexes"
 
     build_and_save_indexes(faq_folder, model, index_folder)
