@@ -1,14 +1,15 @@
-import sys
+from fastapi import FastAPI
 import httpx
-import unicodedata
-import numpy as np
-import faiss
-from langdetect import detect
-from sentence_transformers import SentenceTransformer
-from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from starlette.middleware.cors import CORSMiddleware
+from sentence_transformers import SentenceTransformer
+import numpy as np
+import unicodedata
+import sys
 import logging
+import asyncio
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.concurrency import run_in_threadpool
+import re
 
 # ========== Logging ==========
 logging.basicConfig(
@@ -16,8 +17,8 @@ logging.basicConfig(
     format="%(levelname)s:%(name)s:%(message)s",
     handlers=[logging.StreamHandler(sys.stdout)]
 )
+
 logger = logging.getLogger("chatbot_api")
-logger.info("Logger configurado com sucesso!")
 
 # ========== FastAPI App ==========
 app = FastAPI()
@@ -30,20 +31,53 @@ app.add_middleware(
 )
 
 # ========== Modelo ==========
-try:
-    model = SentenceTransformer("all-MiniLM-L6-v2")
-    logger.info("Modelo de embeddings carregado com sucesso.")
-except Exception as e:
-    logger.exception("Erro ao carregar modelo de embeddings.")
-    sys.exit(1)
+model = SentenceTransformer("all-MiniLM-L6-v2")
 
-# ========== Estruturas de dados ==========
+# ========== Dados ==========
 data_cache = {}
 conversation_states = {}
 
-# ========== Utilitários ==========
-def normalize_text(text: str) -> str:
-    return ''.join(c for c in unicodedata.normalize('NFD', text.lower()) if unicodedata.category(c) != 'Mn')
+# ========== Utils ==========
+def normalize_text(text):
+    text = unicodedata.normalize('NFD', text.lower())
+    text = ''.join(c for c in text if unicodedata.category(c) != 'Mn')
+    return re.sub(r'[^\w\s]', '', text).strip()
+
+def detect_language(text: str) -> str:
+    try:
+        from langdetect import detect
+        norm = normalize_text(text)
+
+        greetings_en = {"hi", "hello", "hey", "good morning", "good afternoon", "good evening", "howdy", "greetings", "what's up", "yo", "sup"}
+        greetings_pt = {"oi", "olá", "ola", "bom dia", "boa tarde", "boa noite", "alô", "alo", "e aí", "fala", "boas"}
+
+        if norm in greetings_en:
+            return "en"
+        if norm in greetings_pt:
+            return "pt"
+
+        if len(text) < 10:
+            return "pt"
+
+        detected = detect(text)
+        return "en" if detected == "en" else "pt"
+    except:
+        return "pt"
+
+def is_greeting(text: str) -> bool:
+    greetings_pt = {"ola", "olá", "bom dia", "boa tarde", "boa noite", "oi", "alô", "alo", "hey", "boas", "e aí", "fala", "opa", "tudo bem", "beleza"}
+    greetings_en = {"hello", "hi", "good morning", "good afternoon", "good evening", "hey", "howdy", "greetings", "what's up", "yo", "sup", "hiya"}
+    norm_text = normalize_text(text.strip())
+    lang = detect_language(text)
+    greetings = greetings_en if lang == "en" else greetings_pt
+    if norm_text in greetings:
+        return True
+    if len(norm_text.split()) > 3:
+        return False
+    for greet in greetings:
+        if norm_text.startswith(greet):
+            return True
+    return False
 
 def detect_categories(user_input, category_keywords):
     norm_input = normalize_text(user_input)
@@ -56,68 +90,34 @@ def is_negative_feedback(user_input, lang, category_keywords, feedback_ids):
     keywords = category_keywords.get(feedback_id, [])
     return any(k in normalize_text(user_input) for k in keywords)
 
-# ========== Busca por Similaridade ==========
-def find_answers_ruled_based(input_text, questions_by_cat, answers_by_cat, lang, detected_cats, top_k=5):
-    input_embedding = model.encode([input_text], convert_to_numpy=True)
+async def find_answers_ruled_based(input_text, questions_by_cat, answers_by_cat, embeddings_by_cat, lang, detected_cats, top_k=5):
+    input_embedding = await run_in_threadpool(lambda: model.encode([input_text], convert_to_numpy=True))
     input_embedding /= np.linalg.norm(input_embedding)
 
-    all_questions, all_answers = [], []
+    all_questions, all_answers, all_embeddings = [], [], []
     for cat_id in detected_cats:
         key = (cat_id, lang)
         all_questions.extend(questions_by_cat.get(key, []))
         all_answers.extend(answers_by_cat.get(key, []))
+        emb = embeddings_by_cat.get(key)
+        if emb is not None:
+            all_embeddings.append(emb)
 
-    if not all_questions:
-        return []
+    if not all_embeddings:
+        return [], 0.0
 
-    embeddings = model.encode(all_questions, convert_to_numpy=True)
-    embeddings /= np.linalg.norm(embeddings, axis=1, keepdims=True)
-
+    embeddings = np.vstack(all_embeddings)
     similarities = np.dot(embeddings, input_embedding.T).flatten()
-    ranked = sorted(zip(similarities, all_questions, all_answers), key=lambda x: x[0], reverse=True)
+    if not len(similarities):
+        return [], 0.0
 
-    seen, unique_answers = set(), []
-    for _, q, a in ranked:
-        if q not in seen:
-            seen.add(q)
-            unique_answers.append(a)
-        if len(unique_answers) >= top_k:
-            break
+    top_k_idx = np.argsort(-similarities)[:top_k]
+    best_similarity = similarities[top_k_idx[0]]
+    unique_answers = [all_answers[i] for i in top_k_idx]
 
-    return unique_answers
+    return unique_answers, best_similarity
 
-def find_answers_faiss(input_text, indices_by_cat, lang, detected_cats, top_k=5):
-    input_embedding = model.encode([input_text], convert_to_numpy=True)
-    candidates = []
-
-    for cat_id in detected_cats:
-        key = (cat_id, lang)
-        data = indices_by_cat.get(key)
-        if data:
-            D, I = data["index"].search(input_embedding, top_k)
-            for dist, idx in zip(D[0], I[0]):
-                if idx < len(data["answers"]):
-                    candidates.append((dist, data["questions"][idx], data["answers"][idx]))
-
-    candidates.sort(key=lambda x: x[0])
-    seen, unique_answers = set(), []
-    for _, q, a in candidates:
-        if q not in seen:
-            seen.add(q)
-            unique_answers.append(a)
-        if len(unique_answers) >= top_k:
-            break
-
-    return unique_answers
-
-# ========== Modelos ==========
-class MessageRequest(BaseModel):
-    message: str
-    session_id: str
-    chatbot_id: str
-    force_reload: bool = False
-
-# ========== Funções de carregamento ==========
+# ========== Fetchers ==========
 async def fetch_categories(chatbot_id: str):
     url = f"http://localhost:3004/chatbot-categoria/{int(chatbot_id)}"
     async with httpx.AsyncClient() as client:
@@ -127,30 +127,22 @@ async def fetch_categories(chatbot_id: str):
 
 async def fetch_faq_data(chatbot_id: int):
     categories = await fetch_categories(str(chatbot_id))
+
+    async def fetch_cat(cat_id):
+        url = f"http://localhost:3004/faq-categoria/?categoria_id={cat_id}"
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            return resp.json()
+
+    tasks = [fetch_cat(cat["categoria_id"]) for cat in categories]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
     faqs = []
-    async with httpx.AsyncClient() as client:
-        for cat in categories:
-            cat_id = cat["categoria_id"]
-            url = f"http://localhost:3004/faq-categoria/?categoria_id={cat_id}"
-            response = await client.get(url)
-            response.raise_for_status()
-            faqs.extend(response.json())
+    for r in results:
+        if isinstance(r, list):
+            faqs.extend(r)
     return faqs
-def detect_language(text: str) -> str:
-    try:
-        if len(text) < 10:
-            return "pt"
-        detected = detect(text)
-        if detected == "en":
-            return "en"
-        elif detected == "pt":
-            return "pt"
-        else:
-            return "pt"  # fallback padrão
-    except:
-        return "pt"
-
-
 
 async def fetch_no_response_message(chatbot_id: int, lang: str):
     url = f"http://localhost:3004/chatbots/{chatbot_id}"
@@ -167,18 +159,39 @@ async def fetch_no_response_message(chatbot_id: int, lang: str):
         logger.error(f"Erro ao buscar mensagem padrão: {e}")
         return "Desculpe, não consegui processar sua solicitação no momento."
 
-# ========== Rota Principal ==========
+async def fetch_greeting_message(chatbot_id: int, lang: str):
+    url = f"http://localhost:3004/chatbots/{chatbot_id}"
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            chatbot_data = response.json()
+            return chatbot_data.get(
+                "mensagem_inicial_pt" if lang == "pt" else "mensagem_inicial_en",
+                "Olá! Como posso ajudar?" if lang == "pt" else "Hello! How can I help you?"
+            )
+    except Exception as e:
+        logger.error(f"Erro ao buscar mensagem de saudação: {e}")
+        return "Olá! Como posso ajudar?" if lang == "pt" else "Hello! How can I help you?"
+
+# ========== Models ==========
+class MessageRequest(BaseModel):
+    message: str
+    session_id: str
+    chatbot_id: str
+    force_reload: bool = False
+
+# ========== Rota ==========
 @app.post("/chat_dumb")
 async def chat(req: MessageRequest):
-    logger.info(f"\n=== NOVA INTERAÇÃO ===\nChatbot: {req.chatbot_id} | Sessão: {req.session_id}\nUsuário: {req.message}")
-
+    logger.info(f"Chatbot: {req.chatbot_id} | Sessão: {req.session_id} | Mensagem: {req.message}")
     user_input = req.message.strip()
     if not user_input:
         return {"response": "Por favor, escreva algo."}
 
     lang = detect_language(user_input)
 
-    if req.force_reload and req.chatbot_id in data_cache:
+    if req.force_reload:
         data_cache.pop(req.chatbot_id, None)
 
     if req.chatbot_id not in data_cache:
@@ -186,7 +199,8 @@ async def chat(req: MessageRequest):
         faqs = await fetch_faq_data(int(req.chatbot_id))
 
         category_keywords, feedback_ids = {}, {"pt": None, "en": None}
-        questions_by_cat, answers_by_cat, indices_by_cat = {}, {}, {}
+        questions_by_cat, answers_by_cat = {}, {}
+        question_embeddings_by_cat = {}
 
         for cat in categories:
             cat_id = cat["categoria_id"]
@@ -198,7 +212,8 @@ async def chat(req: MessageRequest):
         for item in faqs:
             cat_id = item["categoria_id"]
             faq = item.get("faq", {})
-            pergunta, resposta = faq.get("pergunta", "").strip(), faq.get("resposta", "").strip()
+            pergunta = faq.get("pergunta", "").strip()
+            resposta = faq.get("resposta", "").strip()
             idioma = "pt" if normalize_text(faq.get("idioma", "pt").lower()) in ["pt", "portugues", "português"] else "en"
             key = (cat_id, idioma)
             if pergunta and resposta:
@@ -206,21 +221,16 @@ async def chat(req: MessageRequest):
                 answers_by_cat.setdefault(key, []).append(resposta)
 
         for key, questions in questions_by_cat.items():
-            embeddings = model.encode(questions, convert_to_numpy=True)
-            index = faiss.IndexFlatL2(embeddings.shape[1])
-            index.add(embeddings)
-            indices_by_cat[key] = {
-                "index": index,
-                "questions": questions,
-                "answers": answers_by_cat[key],
-            }
+            embeddings = await run_in_threadpool(lambda q=questions: model.encode(q, convert_to_numpy=True))
+            embeddings /= np.linalg.norm(embeddings, axis=1, keepdims=True)
+            question_embeddings_by_cat[key] = embeddings
 
         data_cache[req.chatbot_id] = {
             "category_keywords": category_keywords,
             "feedback_negativo_ids": feedback_ids,
             "questions_by_category": questions_by_cat,
             "answers_by_category": answers_by_cat,
-            "indices_by_category": indices_by_cat,
+            "question_embeddings_by_category": question_embeddings_by_cat
         }
 
     cache = data_cache[req.chatbot_id]
@@ -235,6 +245,10 @@ async def chat(req: MessageRequest):
     if user_input != state["last_question"]:
         state["negative_feedback_count"] = 0
 
+    if is_greeting(user_input):
+        greeting_message = await fetch_greeting_message(int(req.chatbot_id), lang)
+        return {"response": greeting_message}
+
     if is_negative_feedback(user_input, lang, cache["category_keywords"], cache["feedback_negativo_ids"]):
         state["negative_feedback_count"] += 1
         idx = state["last_answer_index"] + 1
@@ -247,12 +261,17 @@ async def chat(req: MessageRequest):
     if not categorias:
         return {"response": await fetch_no_response_message(int(req.chatbot_id), lang)}
 
-    if state["negative_feedback_count"] < 2:
-        answers = find_answers_ruled_based(user_input, cache["questions_by_category"], cache["answers_by_category"], lang, categorias)
-    else:
-        answers = find_answers_faiss(user_input, cache["indices_by_category"], lang, categorias)
+    answers, similarity = await find_answers_ruled_based(
+        user_input,
+        cache["questions_by_category"],
+        cache["answers_by_category"],
+        cache["question_embeddings_by_category"],
+        lang,
+        categorias
+    )
 
-    if not answers:
+    SIMILARITY_THRESHOLD = 0.65
+    if not answers or similarity < SIMILARITY_THRESHOLD:
         return {"response": await fetch_no_response_message(int(req.chatbot_id), lang)}
 
     state.update({

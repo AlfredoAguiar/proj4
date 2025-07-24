@@ -10,15 +10,16 @@ from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 import logging
 
+# Logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(levelname)s:%(name)s:%(message)s",
     handlers=[logging.StreamHandler(sys.stdout)]
 )
-
 logger = logging.getLogger("dumb_api_bd")
 logger.info("Logger configurado e pronto!")
 
+# App & CORS
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
@@ -28,12 +29,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Embeddings
 model = SentenceTransformer("all-MiniLM-L6-v2")
 data_cache = {}
 conversation_states = {}
 
+# Utils
+import re
+
 def normalize_text(text):
-    return ''.join(c for c in unicodedata.normalize('NFD', text.lower()) if unicodedata.category(c) != 'Mn')
+    text = unicodedata.normalize('NFD', text.lower())
+    text = ''.join(c for c in text if unicodedata.category(c) != 'Mn')
+    return re.sub(r'[^\w\s]', '', text).strip()
 
 def detect_categories(user_input, category_keywords):
     norm_input = normalize_text(user_input)
@@ -46,50 +53,92 @@ def is_feedback_negativo(user_input, lang, category_keywords, feedback_negativo_
     norm_input = normalize_text(user_input)
     keywords = category_keywords.get(id_feedback, [])
     return any(k in norm_input for k in keywords)
+
 def detect_language(text: str) -> str:
     try:
+        from langdetect import detect
+        norm = normalize_text(text)
+
+        greetings_en = {
+            "hi", "hello", "hey", "good morning", "good afternoon",
+            "good evening", "howdy", "greetings", "what's up", "yo", "sup"
+        }
+
+        greetings_pt = {
+            "oi", "olá", "ola", "bom dia", "boa tarde", "boa noite",
+            "alô", "alo", "e aí", "fala", "boas"
+        }
+
+        if norm in greetings_en:
+            return "en"
+        if norm in greetings_pt:
+            return "pt"
+
         if len(text) < 10:
             return "pt"
+
         detected = detect(text)
-        if detected == "en":
-            return "en"
-        elif detected == "pt":
-            return "pt"
-        else:
-            return "pt"  # fallback padrão
+        return "en" if detected == "en" else "pt"
     except:
         return "pt"
 
-def find_answers_faiss(user_input, indices_by_category, lang, categorias_detectadas, top_k=5):
-    input_embedding = model.encode([user_input], convert_to_numpy=True)
-    all_candidates = []
+def is_greeting(text: str) -> bool:
+    greetings_pt = {
+        "ola", "olá", "bom dia", "boa tarde", "boa noite", "oi",
+        "alô", "alo", "hey", "boas", "e aí", "fala", "opa", "tudo bem", "beleza"
+    }
 
+    greetings_en = {
+        "hello", "hi", "good morning", "good afternoon", "good evening",
+        "hey", "howdy", "greetings", "what's up", "yo", "sup", "hiya"
+    }
+
+    norm_text = normalize_text(text.strip())
+    lang = detect_language(text)
+
+    greetings = greetings_en if lang == "en" else greetings_pt
+
+    # Se for só uma saudação curta, como "olá" ou "hi"
+    if norm_text in greetings:
+        return True
+
+    # Se for frase longa, ignorar como saudação
+    if len(norm_text.split()) > 3:
+        return False
+
+    # Última tentativa: começa com saudação?
+    for greet in greetings:
+        if norm_text.startswith(greet):
+            return True
+
+    return False
+
+
+def find_answers_faiss_with_threshold(user_input, indices_by_category, lang, categorias_detectadas, top_k=5, threshold=0.6):
+    input_embedding = model.encode([user_input], convert_to_numpy=True)
+    input_embedding /= np.linalg.norm(input_embedding)
+
+    all_candidates = []
     for cat_id in categorias_detectadas:
         key = (cat_id, lang)
         data = indices_by_category.get(key)
         if data:
-            index = data["index"]
-            questions = data["questions"]
-            answers = data["answers"]
-            D, I = index.search(input_embedding, top_k)
-
+            D, I = data["index"].search(input_embedding, top_k)
             for dist, idx in zip(D[0], I[0]):
-                if idx < len(answers):
-                    pergunta = questions[idx]
-                    resposta = answers[idx]
-                    all_candidates.append((dist, pergunta, resposta))
+                if idx < len(data["answers"]):
+                    similarity = 1 - dist / 2
+                    all_candidates.append((similarity, data["questions"][idx], data["answers"][idx]))
 
-    # Ordenar globalmente por menor distância
-    all_candidates.sort(key=lambda x: x[0])
-
+    all_candidates.sort(key=lambda x: x[0], reverse=True)
     seen = set()
-    unique_answers = []
-    for dist, pergunta, resposta in all_candidates:
-        if pergunta not in seen:
-            seen.add(pergunta)
-            unique_answers.append(resposta)
-
-    return unique_answers
+    answers = []
+    for sim, q, a in all_candidates:
+        if sim < threshold:
+            continue
+        if q not in seen:
+            seen.add(q)
+            answers.append(a)
+    return answers
 
 class MessageRequest(BaseModel):
     message: str
@@ -100,38 +149,58 @@ class MessageRequest(BaseModel):
 async def fetch_categories(chatbot_id: str):
     url = f"http://localhost:3004/chatbot-categoria/{int(chatbot_id)}"
     async with httpx.AsyncClient() as client:
-        response = await client.get(url)
-        if response.status_code != 200:
-            raise HTTPException(status_code=response.status_code, detail=f"Erro ao buscar categorias: {response.text}")
-        return response.json()
+        res = await client.get(url)
+        res.raise_for_status()
+        return res.json()
 
 async def fetch_faq_data(chatbot_id: int):
     categories = await fetch_categories(str(chatbot_id))
     faqs = []
     async with httpx.AsyncClient() as client:
         for cat in categories:
-            categoria_id = cat["categoria_id"]
-            url = f"http://localhost:3004/faq-categoria/?categoria_id={categoria_id}"
-            response = await client.get(url)
-            if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail=f"Erro ao buscar FAQs para categoria {categoria_id}: {response.text}")
-            faqs.extend(response.json())
+            cat_id = cat["categoria_id"]
+            url = f"http://localhost:3004/faq-categoria/?categoria_id={cat_id}"
+            res = await client.get(url)
+            res.raise_for_status()
+            faqs.extend(res.json())
     return faqs
+
+async def fetch_no_response_message(chatbot_id: int, lang: str):
+    url = f"http://localhost:3004/chatbots/{chatbot_id}"
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            chatbot_data = response.json()
+            return chatbot_data.get(
+                "mensagem_no_response_pt" if lang == "pt" else "mensagem_no_response_en",
+                "Desculpe, não tenho uma resposta para isso." if lang == "pt" else "Sorry, I don't have an answer for that."
+            )
+    except Exception as e:
+        logger.error(f"Erro ao buscar mensagem padrão: {e}")
+        return "Desculpe, não consegui processar sua solicitação no momento."
+
+async def fetch_greeting_message(chatbot_id: int, lang: str):
+    url = f"http://localhost:3004/chatbots/{chatbot_id}"
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            chatbot_data = response.json()
+            return chatbot_data.get(
+                "mensagem_inicial_pt" if lang == "pt" else "mensagem_inicial_en",
+                "Olá! Como posso ajudar?" if lang == "pt" else "Hello! How can I help you?"
+            )
+    except Exception as e:
+        logger.error(f"Erro ao buscar mensagem de saudação: {e}")
+        return "Olá! Como posso ajudar?" if lang == "pt" else "Hello! How can I help you?"
 
 @app.post("/chat_dumb")
 async def chat(req: MessageRequest):
-    logger.info("=== NOVA INTERAÇÃO ===")
-    logger.info(f"Chatbot ID: {req.chatbot_id}")
-    logger.info(f"Session ID: {req.session_id}")
-    logger.info(f"Mensagem do usuário: {req.message}")
     user_input = req.message.strip()
-    session_id = req.session_id.strip()
-    chatbot_id = req.chatbot_id.strip()
-
-    if not user_input:
-        return {"response": "Por favor, escreva algo."}
-
     lang = detect_language(user_input)
+    chatbot_id = req.chatbot_id.strip()
+    session_id = req.session_id.strip()
 
     if req.force_reload and chatbot_id in data_cache:
         del data_cache[chatbot_id]
@@ -140,116 +209,71 @@ async def chat(req: MessageRequest):
         categories = await fetch_categories(chatbot_id)
         faqs = await fetch_faq_data(int(chatbot_id))
 
-        category_keywords = {}
-        feedback_negativo_ids = {"pt": None, "en": None}
+        cat_keywords, feedback_ids = {}, {"pt": None, "en": None}
+        questions, answers, indices = {}, {}, {}
+
         for cat in categories:
             cat_id = cat["categoria_id"]
-            keywords_raw = cat.get("categoria", {}).get("keywords", [])
-            category_keywords[cat_id] = [normalize_text(k.strip()) for k in keywords_raw]
-            if cat_id == 999:
-                feedback_negativo_ids["pt"] = cat_id
-            elif cat_id == 998:
-                feedback_negativo_ids["en"] = cat_id
-
-        questions_by_category = {}
-        answers_by_category = {}
-        indices_by_category = {}
+            keys = cat.get("categoria", {}).get("keywords", [])
+            cat_keywords[cat_id] = [normalize_text(k) for k in keys]
+            if cat_id == 999: feedback_ids["pt"] = cat_id
+            if cat_id == 998: feedback_ids["en"] = cat_id
 
         for item in faqs:
             cat_id = item["categoria_id"]
             faq = item.get("faq", {})
-            pergunta = faq.get("pergunta", "").strip()
-            resposta = faq.get("resposta", "").strip()
-            idioma_raw = faq.get("idioma", "PT")
-            idioma = "pt" if normalize_text(idioma_raw.strip().lower()) in ["pt", "portugues", "português"] else "en"
-
+            q = faq.get("pergunta", "").strip()
+            a = faq.get("resposta", "").strip()
+            idioma = "pt" if normalize_text(faq.get("idioma", "pt").lower()) in ["pt", "portugues", "português"] else "en"
             key = (cat_id, idioma)
-            if not pergunta or not resposta:
-                continue
+            if q and a:
+                questions.setdefault(key, []).append(q)
+                answers.setdefault(key, []).append(a)
 
-            if key not in questions_by_category:
-                questions_by_category[key] = []
-                answers_by_category[key] = []
-
-            questions_by_category[key].append(pergunta)
-            answers_by_category[key].append(resposta)
-
-        for key, questions in questions_by_category.items():
-            embeddings = model.encode(questions, convert_to_numpy=True)
-            dim = embeddings.shape[1]
-            index = faiss.IndexFlatL2(dim)
-            index.add(embeddings)
-            indices_by_category[key] = {
-                "index": index,
-                "questions": questions,
-                "answers": answers_by_category[key],
-                "embeddings": embeddings,
-            }
+        for key, qlist in questions.items():
+            embeds = model.encode(qlist, convert_to_numpy=True)
+            embeds /= np.linalg.norm(embeds, axis=1, keepdims=True)
+            idx = faiss.IndexFlatL2(embeds.shape[1])
+            idx.add(embeds)
+            indices[key] = {"index": idx, "questions": qlist, "answers": answers[key]}
 
         data_cache[chatbot_id] = {
-            "category_keywords": category_keywords,
-            "feedback_negativo_ids": feedback_negativo_ids,
-            "indices_by_category": indices_by_category
+            "category_keywords": cat_keywords,
+            "feedback_negativo_ids": feedback_ids,
+            "indices_by_category": indices
         }
 
     cache = data_cache[chatbot_id]
-    category_keywords = cache["category_keywords"]
-    feedback_negativo_ids = cache["feedback_negativo_ids"]
-    indices_by_category = cache["indices_by_category"]
+    state = conversation_states.setdefault(session_id, {
+        "language": lang,
+        "last_possible_answers": [],
+        "last_answer_index": 0,
+        "last_question": "",
+        "negative_feedback_count": 0
+    })
 
-    if session_id not in conversation_states:
-        conversation_states[session_id] = {
-            "language": lang,
-            "last_possible_answers": [],
-            "last_answer_index": 0,
-            "last_question": "",
-            "negative_feedback_count": 0
-        }
+    if is_greeting(user_input):
+        return {"response": await fetch_greeting_message(int(chatbot_id), lang)}
 
-    state = conversation_states[session_id]
+    if is_feedback_negativo(user_input, lang, cache["category_keywords"], cache["feedback_negativo_ids"]):
+        idx = state["last_answer_index"] + 1
+        if idx < len(state["last_possible_answers"]):
+            state["last_answer_index"] = idx
+            return {"response": state["last_possible_answers"][idx]}
+        return {"response": await fetch_no_response_message(int(chatbot_id), lang)}
 
-    # Verifica feedback negativo
-    if is_feedback_negativo(user_input, lang, category_keywords, feedback_negativo_ids):
-        previous_answers = state.get("last_possible_answers", [])
-        index = state.get("last_answer_index", 0) + 1
-        if index < len(previous_answers):
-            state["last_answer_index"] = index
-            logger.info(f"🔁 Feedback negativo detectado. Próxima resposta: {previous_answers[index][:150]}...")
-            return {"response": previous_answers[index]}
-        else:
-            msg = "Lamento, não tenho mais respostas alternativas." if lang == "pt" else "Sorry, I don't have more alternative answers."
-            logger.info("🚫 Nenhuma resposta alternativa disponível.")
-            return {"response": msg}
+    categorias = detect_categories(user_input, cache["category_keywords"])
+    if not categorias:
+        return {"response": await fetch_no_response_message(int(chatbot_id), lang)}
 
-    # Reset do estado
+    answers = find_answers_faiss_with_threshold(user_input, cache["indices_by_category"], lang, categorias)
+    if not answers:
+        return {"response": await fetch_no_response_message(int(chatbot_id), lang)}
+
     state.update({
         "last_question": user_input,
-        "negative_feedback_count": 0,
-        "last_possible_answers": [],
+        "last_possible_answers": answers,
         "last_answer_index": 0
     })
 
-    categorias_detectadas = detect_categories(user_input, category_keywords)
-    logger.info(f"Categorias detectadas: {categorias_detectadas}")
-
-    if not categorias_detectadas:
-        msg = "Não consegui identificar uma categoria para sua pergunta. Tente reformular." if lang == "pt" else "Couldn't identify a category for your question. Please rephrase."
-        logger.warning("❌ Nenhuma categoria encontrada.")
-        return {"response": msg}
-
-    unique_answers = find_answers_faiss(user_input, indices_by_category, lang, categorias_detectadas)
-
-    logger.info("Respostas candidatas:")
-    for i, ans in enumerate(unique_answers[:5]):
-        logger.info(f"{i+1}. {ans[:100]}...")
-
-    if not unique_answers:
-        msg = "Peço desculpa, não encontrei uma resposta adequada. Tente reformular a pergunta." if lang == "pt" else "Sorry, I couldn't find a suitable answer."
-        logger.warning("❌ Nenhuma resposta encontrada.")
-        return {"response": msg}
-
-    state["last_possible_answers"] = unique_answers
-    state["last_answer_index"] = 0
-
-    logger.info(f"✅ Resposta enviada: {unique_answers[0][:150]}...\n")
-    return {"response": unique_answers[0]}
+    return {"response": answers[0]}
